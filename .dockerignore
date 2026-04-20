@@ -1,6 +1,7 @@
 .git
 .gitignore
 __pycache__
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -13,3 +14,5 @@ venv
 *.log
 storage/audio/*
 data/demo/*
+data/kb_seed/*
+docs/EXECUTION-STATUS.md

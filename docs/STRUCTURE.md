@@ -22,10 +22,12 @@ Stage sequencing and completion criteria are defined in [stages/README.md](stage
 |
 |-- .agents/
 |   |-- common-agent.md
-|   |-- coordinator-agent.md
+|   |-- planner-agent.md
+|   |-- executor-agent.md
 |   |-- test-agent.md
 |   |-- code-agent.md
 |   |-- verifier-agent.md
+|   |-- executor-policy.json
 |   |-- execution-matrix.yaml
 |   `-- execution-state.json
 |
@@ -36,7 +38,15 @@ Stage sequencing and completion criteria are defined in [stages/README.md](stage
 |-- .dockerignore
 |-- docker-compose.yml
 |-- scripts/
-|   `-- render_execution_status.py
+|   |-- api_start.py
+|   |-- api_proxy.py
+|   `-- agent_runner/
+|       |-- run_stage_agents.py
+|       |-- runner.py
+|       |-- planner.py
+|       |-- executor.py
+|       |-- state.py
+|       `-- ...
 |
 |-- docs/
 |   |-- ARCHITECTURE.md
@@ -65,8 +75,6 @@ Stage sequencing and completion criteria are defined in [stages/README.md](stage
 |
 `-- apps/
     `-- app-api/
-        |-- api_start.py
-        |-- api_proxy.py
         |-- Dockerfile
         |-- requirements.txt
         |-- alembic.ini
@@ -94,7 +102,7 @@ Stage sequencing and completion criteria are defined in [stages/README.md](stage
 - `.env` may exist as a local runtime file and shall remain git-ignored.
 - `.env.example` shall define required runtime configuration keys.
 - `docker-compose.yml` shall start the backend and database for local development.
-- `scripts/` may contain local repository utilities and documentation generators.
+- `scripts/` may contain local repository utilities, OpenAI smoke scripts, and agent runner modules.
 - `docs/` shall contain project documentation only.
 
 ### Documentation
@@ -117,8 +125,8 @@ Stage sequencing and completion criteria are defined in [stages/README.md](stage
 
 ### Application
 
-- `apps/app-api/api_start.py` may be used as a direct OpenAI smoke script without proxy.
-- `apps/app-api/api_proxy.py` may be used as a local OpenAI proxy smoke script outside the main FastAPI runtime.
+- `scripts/api_start.py` may be used as a direct OpenAI smoke script without proxy.
+- `scripts/api_proxy.py` may be used as a local OpenAI proxy smoke script outside the main FastAPI runtime.
 - `apps/app-api/src/api/` shall contain HTTP routes, request schemas, and API dependencies.
 - `apps/app-api/src/application/` shall contain use cases, orchestration logic, and application services.
 - `apps/app-api/src/domain/` shall contain domain entities, interfaces, enums, and business rules.

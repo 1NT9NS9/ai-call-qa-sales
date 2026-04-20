@@ -9,7 +9,7 @@ MODEL = "gpt-5.3-codex" # gpt-5.4, gpt-5.4-mini, gpt-5.2, gpt-5.3-codex
 REASONING_EFFORT = "high" # none, low, medium, high, xhigh
 PROMPT = "Reply with exactly: ok1"
 OPENAI_BASE_URL = "https://api.openai.com/v1"
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 def load_config() -> str:
