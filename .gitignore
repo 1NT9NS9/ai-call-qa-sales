@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+
+# Local env
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
+*.log
+storage/audio/*
+!storage/audio/.gitkeep
+data/demo/*
+!data/demo/.gitkeep
+data/kb_seed/*
+!data/kb_seed/.gitkeep
+
+# Code
+apps/app-api/api_proxy.py

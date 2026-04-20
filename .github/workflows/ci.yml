@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  app-api-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r apps/app-api/requirements.txt
+          pip install pytest flake8 mypy
+
+      - name: Lint
+        run: flake8 apps/app-api/src apps/app-api/tests
+
+      - name: Type check
+        run: mypy --python-version 3.12 --ignore-missing-imports apps/app-api/src
+
+      - name: Compile source
+        run: python -m compileall apps/app-api/src
+
+      - name: Smoke import application
+        working-directory: apps/app-api
+        run: |
+          python - <<'PY'
+          from src.main import app
+          assert app.title == "AI Call QA & Sales Coach API"
+          print("Application import smoke check passed.")
+          PY
+
+      - name: Run tests if present
+        run: |
+          if find apps/app-api/tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
+            python -m pytest apps/app-api/tests -q
+          else
+            echo "No test files found; skipping pytest."
+          fi
+
+      - name: Build Docker image
+        run: docker build -f apps/app-api/Dockerfile -t hr-project-app-api .
