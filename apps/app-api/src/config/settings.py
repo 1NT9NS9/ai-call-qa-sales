@@ -43,17 +43,21 @@ def _load_dotenv_values(dotenv_path: Path | None = None) -> dict[str, str]:
 
 
 def _get_stage0_value(key: str, dotenv_values: dict[str, str]) -> str:
-    value = os.getenv(key, dotenv_values.get(key))
-    if value in (None, ""):
+    env_value = os.getenv(key)
+    if env_value is not None and env_value != "":
+        return env_value
+
+    dotenv_value = dotenv_values.get(key)
+    if dotenv_value is None or dotenv_value == "":
         raise RuntimeError(f"Missing required Stage 0 setting: {key}")
 
-    return value
+    return dotenv_value
 
 
 def load_settings() -> Settings:
     dotenv_values = _load_dotenv_values()
 
-    resolved_values = {}
+    resolved_values: dict[str, str] = {}
     for key in REQUIRED_STAGE0_KEYS:
         resolved_values[key] = _get_stage0_value(key, dotenv_values)
 
