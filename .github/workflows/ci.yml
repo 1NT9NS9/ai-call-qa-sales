@@ -37,13 +37,17 @@ jobs:
       - name: Compile source
         run: python -m compileall apps/app-api/src
 
-      - name: Smoke import application
+      - name: Smoke import application factory
         working-directory: apps/app-api
         run: |
           python - <<'PY'
-          from src.main import app
-          assert app.title == "AI Call QA & Sales Coach API"
-          print("Application import smoke check passed.")
+          from src.main import create_app
+          app = create_app()
+          try:
+            assert app.title == "AI Call QA & Sales Coach API"
+            print("Application factory smoke check passed.")
+          finally:
+            app.state.engine.dispose()
           PY
 
       - name: Run tests if present
