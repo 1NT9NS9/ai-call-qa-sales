@@ -9,9 +9,13 @@ __pycache__
 .mypy_cache
 .ruff_cache
 .venv
+.pydeps
 .env
+temp-pip
 venv
 *.log
+pytest-cache-files-*
+apps/app-api/test-tmp-runs/
 storage/audio/*
 data/demo/*
 data/kb_seed/*
