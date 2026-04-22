@@ -1,22 +1,49 @@
-.git
-.gitignore
-__pycache__
-**/__pycache__/
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
 *.pyo
 *.pyd
-.pytest_cache
-.mypy_cache
-.ruff_cache
-.venv
-.pydeps
+*.tmp-pip/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Virtual envs
+.venv/
+venv/
+.pydeps/
+temp-pip/
+
+# Local env
 .env
-temp-pip
-venv
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
 *.log
-pytest-cache-files-*
-apps/app-api/test-tmp-runs/
 storage/audio/*
+!storage/audio/.gitkeep
 data/demo/*
+!data/demo/.gitkeep
 data/kb_seed/*
-docs/EXECUTION-STATUS.md
+!data/kb_seed/.gitkeep
+pytest-cache-files-*
+.docker-config/
+apps/app-api/.tmp-stage1-t7/
+apps/app-api/.tmp-stage1-t7-*/
+apps/app-api/.tmp-stage1-t8/
+apps/app-api/.tmp-stage1-t8-*/
+apps/app-api/test-tmp-runs/
+apps/app-api/stage1-t7-*/
+apps/app-api/sqlite-check-*/
+apps/app-api/sqlite-manual.db
+apps/app-api/sqlite-nested-test/
+docs/

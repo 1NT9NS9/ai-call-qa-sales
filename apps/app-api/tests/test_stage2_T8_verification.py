@@ -1,7 +1,6 @@
 import importlib
 import inspect
 import shutil
-import sys
 import unittest
 import uuid
 from pathlib import Path
@@ -9,13 +8,11 @@ from unittest.mock import Mock, patch
 
 from alembic import command
 from alembic.config import Config
+from conftest import ALEMBIC_INI_PATH, TEST_TMP_ROOT, clear_src_modules
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 
 
-APP_API_ROOT = Path(__file__).resolve().parents[1]
-ALEMBIC_INI_PATH = APP_API_ROOT / "alembic.ini"
-TEST_TMP_ROOT = APP_API_ROOT / "test-tmp-runs"
 CREATE_CALL_PAYLOAD = {
     "external_call_id": "ext-call-stage2-t8",
     "source_type": "api",
@@ -29,14 +26,6 @@ AUDIO_UPLOAD = {
         "audio/wav",
     )
 }
-
-
-def _clear_src_modules() -> None:
-    for module_name in list(sys.modules):
-        if module_name == "src" or module_name.startswith("src."):
-            sys.modules.pop(module_name, None)
-
-
 class Stage2BoundedVerificationTests(unittest.TestCase):
     def _create_clean_database_context(self) -> tuple[Path, str]:
         TEST_TMP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -63,7 +52,7 @@ class Stage2BoundedVerificationTests(unittest.TestCase):
                 alembic_config = Config(str(ALEMBIC_INI_PATH))
                 command.upgrade(alembic_config, "head")
 
-                _clear_src_modules()
+                clear_src_modules()
                 main_module = importlib.import_module("src.main")
                 stt_module = importlib.import_module("src.adapters.stt")
                 persistence_models = importlib.import_module(
@@ -116,7 +105,7 @@ class Stage2BoundedVerificationTests(unittest.TestCase):
                         self.assertGreaterEqual(upload_response.status_code, 200)
                         self.assertLess(upload_response.status_code, 300)
                 finally:
-                    _clear_src_modules()
+                    clear_src_modules()
 
             engine = create_engine(database_url)
             with engine.connect() as connection:
@@ -151,14 +140,14 @@ class Stage2BoundedVerificationTests(unittest.TestCase):
             )
 
             with patch.dict("os.environ", env_values, clear=True):
-                _clear_src_modules()
+                clear_src_modules()
                 reloaded_main_module = importlib.import_module("src.main")
 
                 try:
                     with TestClient(reloaded_main_module.create_app()) as client:
                         get_response = client.get(f"/calls/{call_id}")
                 finally:
-                    _clear_src_modules()
+                    clear_src_modules()
 
             self.assertEqual(get_response.status_code, 200)
             payload = get_response.json()
@@ -177,7 +166,7 @@ class Stage2BoundedVerificationTests(unittest.TestCase):
                 ["customer", "agent"],
             )
         finally:
-            _clear_src_modules()
+            clear_src_modules()
             if engine is not None:
                 engine.dispose()
             shutil.rmtree(temp_root, ignore_errors=True)

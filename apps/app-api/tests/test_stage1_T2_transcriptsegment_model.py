@@ -1,15 +1,13 @@
 import importlib
 import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
+from conftest import APP_API_ROOT, MINIMAL_ENV_VALUES, SRC_ROOT
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.inspection import inspect as sqlalchemy_inspect
 
 
-APP_API_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = APP_API_ROOT / "src"
 REQUIRED_TRANSCRIPTSEGMENT_COLUMNS = {
     "id",
     "call_id",
@@ -19,15 +17,6 @@ REQUIRED_TRANSCRIPTSEGMENT_COLUMNS = {
     "end_ms",
     "sequence_no",
 }
-MINIMAL_ENV_VALUES = {
-    "APP_ENV": "test",
-    "APP_HOST": "127.0.0.1",
-    "APP_PORT": "8000",
-    "DATABASE_URL": "postgresql+psycopg://app_user:app_password@db:5432/app_db",
-    "STORAGE_AUDIO_DIR": "/tmp/audio",
-}
-
-
 def _candidate_module_names() -> list[str]:
     module_names: list[str] = []
 

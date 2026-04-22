@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from conftest import load_env_file
 from src.config.settings import (
     _load_dotenv_values,
     _resolve_repo_root,
@@ -14,23 +15,9 @@ ENV_EXAMPLE_PATH = REPO_ROOT / ".env.example"
 DOCKER_COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 
 
-def load_env_example() -> dict[str, str]:
-    values: dict[str, str] = {}
-
-    for raw_line in ENV_EXAMPLE_PATH.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        key, value = line.split("=", 1)
-        values[key] = value
-
-    return values
-
-
 class Stage0BootstrapConfigTests(unittest.TestCase):
     def test_env_example_contains_minimal_stage0_bootstrap_keys(self) -> None:
-        env_values = load_env_example()
+        env_values = load_env_file(ENV_EXAMPLE_PATH)
 
         self.assertEqual(env_values["APP_ENV"], "local")
         self.assertEqual(env_values["APP_HOST"], "127.0.0.1")

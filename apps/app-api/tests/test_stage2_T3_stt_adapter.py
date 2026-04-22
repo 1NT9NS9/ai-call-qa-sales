@@ -1,22 +1,10 @@
 import ast
 import importlib
 import inspect
-import sys
 import unittest
 from pathlib import Path
 
-
-APP_API_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = APP_API_ROOT / "src"
-
-if str(APP_API_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_API_ROOT))
-
-
-def _clear_src_modules() -> None:
-    for module_name in list(sys.modules):
-        if module_name == "src" or module_name.startswith("src."):
-            sys.modules.pop(module_name, None)
+from conftest import APP_API_ROOT, SRC_ROOT, clear_src_modules
 
 
 def _iter_python_files() -> list[Path]:
@@ -67,7 +55,7 @@ class Stage2STTAdapterTests(unittest.TestCase):
                 self.assertIn("file_path", signature.parameters)
                 return
         finally:
-            _clear_src_modules()
+            clear_src_modules()
 
         self.fail("No importable STTAdapter class was found under apps/app-api/src.")
 

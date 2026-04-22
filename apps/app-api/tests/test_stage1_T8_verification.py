@@ -1,6 +1,5 @@
 import importlib
 import shutil
-import sys
 import unittest
 import uuid
 from pathlib import Path
@@ -8,13 +7,11 @@ from unittest.mock import patch
 
 from alembic import command
 from alembic.config import Config
+from conftest import ALEMBIC_INI_PATH, TEST_TMP_ROOT, clear_src_modules
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select
 
 
-APP_API_ROOT = Path(__file__).resolve().parents[1]
-ALEMBIC_INI_PATH = APP_API_ROOT / "alembic.ini"
-TEST_TMP_ROOT = APP_API_ROOT / "test-tmp-runs"
 REQUIRED_STAGE1_TABLES = {
     "call_sessions",
     "transcript_segments",
@@ -29,14 +26,6 @@ CALLS_PAYLOAD = {
     "source_type": "api",
     "metadata": {"campaign": "stage1", "channel": "sales"},
 }
-
-
-def _clear_src_modules() -> None:
-    for module_name in list(sys.modules):
-        if module_name == "src" or module_name.startswith("src."):
-            sys.modules.pop(module_name, None)
-
-
 class Stage1BoundedVerificationTests(unittest.TestCase):
     def _create_clean_database_context(self) -> tuple[Path, str]:
         TEST_TMP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -82,7 +71,7 @@ class Stage1BoundedVerificationTests(unittest.TestCase):
             self.assertNotIn("review_required", call_session_columns)
             self.assertNotIn("review_reasons", call_session_columns)
         finally:
-            _clear_src_modules()
+            clear_src_modules()
             if engine is not None:
                 engine.dispose()
             shutil.rmtree(temp_root, ignore_errors=True)
@@ -105,7 +94,7 @@ class Stage1BoundedVerificationTests(unittest.TestCase):
                 alembic_config = Config(str(ALEMBIC_INI_PATH))
                 command.upgrade(alembic_config, "head")
 
-                _clear_src_modules()
+                clear_src_modules()
                 main_module = importlib.import_module("src.main")
                 persistence_models = importlib.import_module(
                     "src.infrastructure.persistence.models"
@@ -115,7 +104,7 @@ class Stage1BoundedVerificationTests(unittest.TestCase):
                     with TestClient(main_module.create_app()) as client:
                         response = client.post("/calls", json=CALLS_PAYLOAD)
                 finally:
-                    _clear_src_modules()
+                    clear_src_modules()
 
             self.assertEqual(response.status_code, 201)
 
@@ -138,7 +127,7 @@ class Stage1BoundedVerificationTests(unittest.TestCase):
                 "created",
             )
         finally:
-            _clear_src_modules()
+            clear_src_modules()
             if engine is not None:
                 engine.dispose()
             shutil.rmtree(temp_root, ignore_errors=True)
