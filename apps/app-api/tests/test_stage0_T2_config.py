@@ -2,7 +2,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.config.settings import _load_dotenv_values, load_settings
+from src.config.settings import (
+    _load_dotenv_values,
+    _resolve_repo_root,
+    load_settings,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -164,3 +168,17 @@ class Stage0BootstrapConfigTests(unittest.TestCase):
             side_effect=fake_read_text,
         ):
             self.assertEqual(_load_dotenv_values(explicit_dotenv_path), {})
+
+    def test_repo_root_resolution_falls_back_safely_for_container_paths(
+        self,
+    ) -> None:
+        settings_path = Path("/app/src/config/settings.py")
+
+        with patch(
+            "pathlib.Path.is_file",
+            autospec=True,
+            return_value=False,
+        ):
+            repo_root = _resolve_repo_root(settings_path)
+
+        self.assertEqual(repo_root, Path("/app"))

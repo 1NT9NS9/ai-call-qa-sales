@@ -11,7 +11,18 @@ REQUIRED_STAGE0_KEYS = (
     "STORAGE_AUDIO_DIR",
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+def _resolve_repo_root(settings_path: Path | None = None) -> Path:
+    settings_path = settings_path or Path(__file__).resolve()
+    fallback_root = settings_path.parents[2]
+
+    for parent in settings_path.parents:
+        if (parent / "docker-compose.yml").is_file():
+            return parent
+
+    return fallback_root
+
+
+REPO_ROOT = _resolve_repo_root()
 DOTENV_PATH = REPO_ROOT / ".env"
 
 

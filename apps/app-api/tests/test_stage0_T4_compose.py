@@ -44,7 +44,7 @@ class Stage0ComposeTests(unittest.TestCase):
         self.assertIn(
             (
                 "command: uvicorn src.main:app "
-                "--host 0.0.0.0 --port 8000 --reload"
+                "--host 0.0.0.0 --port 8000"
             ),
             compose_text,
         )
