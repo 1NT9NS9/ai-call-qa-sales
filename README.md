@@ -35,5 +35,22 @@ Check these points before publishing the repository:
 - `.env` is not committed
 - no real secrets are left in example files or docs
 - `storage/audio/`, `data/demo/`, and local cache folders are not staged
-- `docker compose config` passes
-- optional: `docker compose up --build` and `GET /health` pass locally
+- fast local checks pass:
+
+```powershell
+python -m ruff check apps/app-api/src apps/app-api/tests
+python -m mypy --python-version 3.12 --ignore-missing-imports apps/app-api/src
+python -m pytest apps/app-api/tests -q
+```
+
+- if you changed bootstrap, Docker, Compose, or environment files, also run:
+
+```powershell
+docker compose config
+docker compose up --build
+Invoke-WebRequest -Uri http://127.0.0.1:8000/health | Select-Object -ExpandProperty Content
+docker compose exec app-api sh -lc "test -d /app/storage/audio"
+docker compose exec db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT extname FROM pg_extension WHERE extname = ''vector''"'
+```
+
+GitHub Actions remains the final clean-environment verification for every push and pull request.

@@ -23,6 +23,7 @@ class Stage0CiWorkflowTests(unittest.TestCase):
             ),
             workflow_text,
         )
+        self.assertIn('test "$healthy" -eq 1', workflow_text)
         self.assertIn(
             (
                 "docker compose exec -T app-api sh -lc "
