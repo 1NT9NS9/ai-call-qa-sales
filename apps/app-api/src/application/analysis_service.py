@@ -6,6 +6,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from sqlalchemy.orm import Session, sessionmaker
+
+from src.application.analysis_tools import AnalysisToolAPI, build_analysis_tool_api
+from src.services.rag import RAGService
+
 
 @dataclass(frozen=True)
 class AnalysisAssets:
@@ -60,8 +65,13 @@ def load_analysis_schema_from_contracts(
 
 
 class AnalysisService:
-    def __init__(self, resources_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        resources_dir: Path | None = None,
+        tool_api: AnalysisToolAPI | None = None,
+    ) -> None:
         self._resources_dir = resources_dir or _default_resources_dir()
+        self._tool_api = tool_api
 
     def load_assets(self) -> AnalysisAssets:
         prompt_path = self._resources_dir / "analysis_prompt.md"
@@ -72,6 +82,40 @@ class AnalysisService:
             schema=load_analysis_schema_from_contracts(self._resources_dir),
         )
 
+    def tool_definitions(self) -> list[dict[str, Any]]:
+        if self._tool_api is None:
+            return []
 
-def build_analysis_service(resources_dir: Path | None = None) -> AnalysisService:
-    return AnalysisService(resources_dir=resources_dir)
+        return [
+            {
+                "name": definition.name,
+                "description": definition.description,
+                "parameters": definition.parameters,
+            }
+            for definition in self._tool_api.definitions()
+        ]
+
+    def invoke_tool(self, tool_name: str, **kwargs: Any) -> Any:
+        if self._tool_api is None:
+            raise RuntimeError("Analysis tool API is not configured.")
+
+        return self._tool_api.invoke(tool_name, **kwargs)
+
+
+def build_analysis_service(
+    resources_dir: Path | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+    rag_service: RAGService | None = None,
+) -> AnalysisService:
+    tool_api = None
+    if session_factory is not None or rag_service is not None:
+        if session_factory is None or rag_service is None:
+            raise ValueError(
+                "session_factory and rag_service must be provided together."
+            )
+        tool_api = build_analysis_tool_api(
+            session_factory=session_factory,
+            rag_service=rag_service,
+        )
+
+    return AnalysisService(resources_dir=resources_dir, tool_api=tool_api)
