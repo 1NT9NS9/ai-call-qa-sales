@@ -9,7 +9,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.application.analysis_tools import AnalysisToolAPI, build_analysis_tool_api
+from src.application.analysis_tools import (
+    AnalysisToolAPI,
+    build_analysis_tool_api,
+    build_langchain_tools,
+)
 from src.infrastructure.persistence.models import TranscriptSegment
 from src.services.rag import RAGService
 
@@ -72,10 +76,14 @@ class AnalysisService:
         resources_dir: Path | None = None,
         tool_api: AnalysisToolAPI | None = None,
         session_factory: sessionmaker[Session] | None = None,
+        chat_model: Any | None = None,
+        langchain_tools: list[Any] | None = None,
     ) -> None:
         self._resources_dir = resources_dir or _default_resources_dir()
         self._tool_api = tool_api
         self._session_factory = session_factory
+        self._chat_model = chat_model
+        self._langchain_tools = langchain_tools or []
 
     def load_assets(self) -> AnalysisAssets:
         prompt_path = self._resources_dir / "analysis_prompt.md"
@@ -104,6 +112,14 @@ class AnalysisService:
             raise RuntimeError("Analysis tool API is not configured.")
 
         return self._tool_api.invoke(tool_name, **kwargs)
+
+    def analyze(self, call_id: int) -> Any:
+        if self._chat_model is None:
+            raise RuntimeError("Analysis chat model is not configured.")
+
+        payload = self._build_analysis_payload(call_id=call_id)
+        bound_model = self._bind_langchain_tools(self._chat_model)
+        return bound_model.invoke(payload)
 
     def build_prompt_context(
         self,
@@ -152,13 +168,35 @@ class AnalysisService:
             for segment in segments
         ]
 
+    def _build_analysis_payload(self, call_id: int) -> dict[str, Any]:
+        assets = self.load_assets()
+        return {
+            "prompt": assets.prompt,
+            "rubric": assets.rubric,
+            "schema": assets.schema,
+            "context": self.build_prompt_context(call_id=call_id),
+        }
+
+    def _bind_langchain_tools(self, chat_model: Any) -> Any:
+        if not self._langchain_tools:
+            raise RuntimeError("LangChain tools are not configured.")
+        if not hasattr(chat_model, "bind_tools"):
+            raise RuntimeError("Configured analysis chat model does not support bind_tools.")
+
+        return chat_model.bind_tools(self._langchain_tools)
+
 
 def build_analysis_service(
     resources_dir: Path | None = None,
     session_factory: sessionmaker[Session] | None = None,
     rag_service: RAGService | None = None,
+    chat_model: Any | None = None,
+    llm: Any | None = None,
+    model: Any | None = None,
+    analysis_model: Any | None = None,
 ) -> AnalysisService:
     tool_api = None
+    langchain_tools = None
     if session_factory is not None or rag_service is not None:
         if session_factory is None or rag_service is None:
             raise ValueError(
@@ -168,9 +206,21 @@ def build_analysis_service(
             session_factory=session_factory,
             rag_service=rag_service,
         )
+        langchain_tools = build_langchain_tools(
+            session_factory=session_factory,
+            rag_service=rag_service,
+        )
+
+    resolved_chat_model = chat_model
+    for candidate in (llm, model, analysis_model):
+        if candidate is not None:
+            resolved_chat_model = candidate
+            break
 
     return AnalysisService(
         resources_dir=resources_dir,
         tool_api=tool_api,
         session_factory=session_factory,
+        chat_model=resolved_chat_model,
+        langchain_tools=langchain_tools,
     )

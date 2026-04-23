@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.infrastructure.persistence.models import CallSession
 from src.services.rag import RAGService, RetrievedKnowledgeChunk
+
+try:
+    from langchain_core.tools import StructuredTool
+except ImportError:  # pragma: no cover - exercised only when langchain-core is absent
+    StructuredTool = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,15 @@ class AnalysisToolAPI:
             raise KeyError(f"Unknown analysis tool: {tool_name}") from exc
 
         return tool.handler(**kwargs)
+
+
+class RetrieveContextArgs(BaseModel):
+    call_id: int
+    limit: int = Field(default=5)
+
+
+class GetCallMetadataArgs(BaseModel):
+    call_id: int
 
 
 def _serialize_retrieved_chunk(
@@ -151,3 +166,34 @@ def build_tool_api(
         "retrieve_context": retrieve_context,
         "get_call_metadata": get_call_metadata,
     }
+
+
+def build_langchain_tools(
+    *,
+    session_factory: sessionmaker[Session],
+    rag_service: RAGService,
+) -> list[Any]:
+    tool_api = build_tool_api(
+        session_factory=session_factory,
+        rag_service=rag_service,
+    )
+    if StructuredTool is None:
+        return [
+            tool_api["retrieve_context"],
+            tool_api["get_call_metadata"],
+        ]
+
+    return [
+        StructuredTool.from_function(
+            func=tool_api["retrieve_context"],
+            name="retrieve_context",
+            description="Retrieve knowledge-base context for a call.",
+            args_schema=RetrieveContextArgs,
+        ),
+        StructuredTool.from_function(
+            func=tool_api["get_call_metadata"],
+            name="get_call_metadata",
+            description="Get stored metadata for a call.",
+            args_schema=GetCallMetadataArgs,
+        ),
+    ]
