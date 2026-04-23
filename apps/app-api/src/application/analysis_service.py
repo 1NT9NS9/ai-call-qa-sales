@@ -31,6 +31,10 @@ class AnalysisSchemaContractSource:
     fence_label: str
 
 
+class AnalysisOutputValidationError(RuntimeError):
+    pass
+
+
 def _default_resources_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "resources" / "analysis"
 
@@ -119,7 +123,21 @@ class AnalysisService:
 
         payload = self._build_analysis_payload(call_id=call_id)
         bound_model = self._bind_langchain_tools(self._chat_model)
-        return bound_model.invoke(payload)
+        last_error: AnalysisOutputValidationError | None = None
+
+        for _attempt in range(2):
+            response = bound_model.invoke(payload)
+            try:
+                return self._parse_and_validate_analysis_output(
+                    response=response,
+                    schema=payload["schema"],
+                )
+            except AnalysisOutputValidationError as exc:
+                last_error = exc
+
+        raise AnalysisOutputValidationError(
+            "Analysis output remained invalid after one retry."
+        ) from last_error
 
     def build_prompt_context(
         self,
@@ -193,6 +211,132 @@ class AnalysisService:
             raise RuntimeError("Configured analysis chat model does not support bind_tools.")
 
         return bind_tools(self._langchain_tools)
+
+    def _parse_and_validate_analysis_output(
+        self,
+        *,
+        response: Any,
+        schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        content = self._extract_response_content(response)
+        try:
+            parsed_output = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise AnalysisOutputValidationError("Analysis output is invalid JSON.") from exc
+
+        validation_errors = self._validate_schema_instance(
+            instance=parsed_output,
+            schema=schema,
+        )
+        if validation_errors:
+            raise AnalysisOutputValidationError(
+                "Analysis output failed schema validation: "
+                + "; ".join(validation_errors)
+            )
+
+        return parsed_output
+
+    @staticmethod
+    def _extract_response_content(response: Any) -> str:
+        if isinstance(response, str):
+            return response
+        if isinstance(response, dict) and "content" in response:
+            content = response["content"]
+            if isinstance(content, str):
+                return content
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            return content
+
+        raise AnalysisOutputValidationError(
+            "Analysis response did not provide string content."
+        )
+
+    def _validate_schema_instance(
+        self,
+        *,
+        instance: Any,
+        schema: dict[str, Any],
+        path: str = "$",
+    ) -> list[str]:
+        errors: list[str] = []
+        schema_type = schema.get("type")
+
+        if schema_type == "object":
+            if not isinstance(instance, dict):
+                return [f"{path} must be an object"]
+
+            required_fields = schema.get("required", [])
+            for field_name in required_fields:
+                if field_name not in instance:
+                    errors.append(f"{path}.{field_name} is required")
+
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                unexpected_fields = sorted(
+                    field_name
+                    for field_name in instance
+                    if field_name not in properties
+                )
+                for field_name in unexpected_fields:
+                    errors.append(f"{path}.{field_name} is not allowed")
+
+            for field_name, field_schema in properties.items():
+                if field_name not in instance:
+                    continue
+                errors.extend(
+                    self._validate_schema_instance(
+                        instance=instance[field_name],
+                        schema=field_schema,
+                        path=f"{path}.{field_name}",
+                    )
+                )
+            return errors
+
+        if schema_type == "array":
+            if not isinstance(instance, list):
+                return [f"{path} must be an array"]
+
+            item_schema = schema.get("items")
+            if isinstance(item_schema, dict):
+                for index, item in enumerate(instance):
+                    errors.extend(
+                        self._validate_schema_instance(
+                            instance=item,
+                            schema=item_schema,
+                            path=f"{path}[{index}]",
+                        )
+                    )
+            return errors
+
+        if schema_type == "string":
+            if not isinstance(instance, str):
+                return [f"{path} must be a string"]
+            return errors
+
+        if schema_type == "boolean":
+            if not isinstance(instance, bool):
+                return [f"{path} must be a boolean"]
+            return errors
+
+        if schema_type == "integer":
+            if isinstance(instance, bool) or not isinstance(instance, int):
+                return [f"{path} must be an integer"]
+            return errors
+
+        if schema_type == "number":
+            if isinstance(instance, bool) or not isinstance(instance, (int, float)):
+                return [f"{path} must be a number"]
+            minimum = schema.get("minimum")
+            maximum = schema.get("maximum")
+            numeric_instance = float(instance)
+            if minimum is not None and numeric_instance < float(minimum):
+                errors.append(f"{path} must be >= {minimum}")
+            if maximum is not None and numeric_instance > float(maximum):
+                errors.append(f"{path} must be <= {maximum}")
+            return errors
+
+        return errors
 
 
 def build_analysis_service(
