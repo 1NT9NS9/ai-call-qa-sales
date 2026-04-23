@@ -6,9 +6,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.application.analysis_tools import AnalysisToolAPI, build_analysis_tool_api
+from src.infrastructure.persistence.models import TranscriptSegment
 from src.services.rag import RAGService
 
 
@@ -69,9 +71,11 @@ class AnalysisService:
         self,
         resources_dir: Path | None = None,
         tool_api: AnalysisToolAPI | None = None,
+        session_factory: sessionmaker[Session] | None = None,
     ) -> None:
         self._resources_dir = resources_dir or _default_resources_dir()
         self._tool_api = tool_api
+        self._session_factory = session_factory
 
     def load_assets(self) -> AnalysisAssets:
         prompt_path = self._resources_dir / "analysis_prompt.md"
@@ -101,6 +105,53 @@ class AnalysisService:
 
         return self._tool_api.invoke(tool_name, **kwargs)
 
+    def build_prompt_context(
+        self,
+        call_id: int,
+        context_limit: int = 5,
+    ) -> dict[str, Any]:
+        if self._tool_api is None or self._session_factory is None:
+            raise RuntimeError(
+                "Analysis prompt-context assembly requires tool_api and session_factory."
+            )
+
+        transcript = self._load_transcript(call_id=call_id)
+        return {
+            "call_id": call_id,
+            "transcript": transcript,
+            "retrieved_context": self.invoke_tool(
+                "retrieve_context",
+                call_id=call_id,
+                limit=context_limit,
+            ),
+            "call_metadata": self.invoke_tool(
+                "get_call_metadata",
+                call_id=call_id,
+            ),
+        }
+
+    def _load_transcript(self, call_id: int) -> list[dict[str, Any]]:
+        with self._session_factory() as session:
+            segments = list(
+                session.scalars(
+                    select(TranscriptSegment)
+                    .where(TranscriptSegment.call_id == call_id)
+                    .order_by(TranscriptSegment.sequence_no, TranscriptSegment.id)
+                )
+            )
+
+        return [
+            {
+                "segment_id": segment.id,
+                "speaker": segment.speaker,
+                "text": segment.text,
+                "start_ms": segment.start_ms,
+                "end_ms": segment.end_ms,
+                "sequence_no": segment.sequence_no,
+            }
+            for segment in segments
+        ]
+
 
 def build_analysis_service(
     resources_dir: Path | None = None,
@@ -118,4 +169,8 @@ def build_analysis_service(
             rag_service=rag_service,
         )
 
-    return AnalysisService(resources_dir=resources_dir, tool_api=tool_api)
+    return AnalysisService(
+        resources_dir=resources_dir,
+        tool_api=tool_api,
+        session_factory=session_factory,
+    )
