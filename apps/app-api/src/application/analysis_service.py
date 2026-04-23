@@ -147,6 +147,11 @@ class AnalysisService:
         }
 
     def _load_transcript(self, call_id: int) -> list[dict[str, Any]]:
+        if self._session_factory is None:
+            raise RuntimeError(
+                "Analysis transcript loading requires session_factory."
+            )
+
         with self._session_factory() as session:
             segments = list(
                 session.scalars(
@@ -183,7 +188,11 @@ class AnalysisService:
         if not hasattr(chat_model, "bind_tools"):
             raise RuntimeError("Configured analysis chat model does not support bind_tools.")
 
-        return chat_model.bind_tools(self._langchain_tools)
+        bind_tools = getattr(chat_model, "bind_tools", None)
+        if bind_tools is None:
+            raise RuntimeError("Configured analysis chat model does not support bind_tools.")
+
+        return bind_tools(self._langchain_tools)
 
 
 def build_analysis_service(

@@ -12,7 +12,7 @@ from src.services.rag import RAGService, RetrievedKnowledgeChunk
 try:
     from langchain_core.tools import StructuredTool
 except ImportError:  # pragma: no cover - exercised only when langchain-core is absent
-    StructuredTool = None
+    StructuredTool = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -177,20 +177,21 @@ def build_langchain_tools(
         session_factory=session_factory,
         rag_service=rag_service,
     )
-    if StructuredTool is None:
+    structured_tool_cls = StructuredTool
+    if structured_tool_cls is None:
         return [
             tool_api["retrieve_context"],
             tool_api["get_call_metadata"],
         ]
 
     return [
-        StructuredTool.from_function(
+        structured_tool_cls.from_function(
             func=tool_api["retrieve_context"],
             name="retrieve_context",
             description="Retrieve knowledge-base context for a call.",
             args_schema=RetrieveContextArgs,
         ),
-        StructuredTool.from_function(
+        structured_tool_cls.from_function(
             func=tool_api["get_call_metadata"],
             name="get_call_metadata",
             description="Get stored metadata for a call.",
