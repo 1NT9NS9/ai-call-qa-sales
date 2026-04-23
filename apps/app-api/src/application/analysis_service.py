@@ -445,7 +445,11 @@ class AnalysisService:
         if not self._supports_persistence():
             return
 
-        with self._session_factory() as session:
+        session_factory = self._session_factory
+        if session_factory is None:
+            return
+
+        with session_factory() as session:
             persisted_call = session.get(CallSession, call_id)
             if persisted_call is None:
                 raise RuntimeError(f"CallSession not found for call_id={call_id}.")
