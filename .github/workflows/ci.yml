@@ -9,6 +9,20 @@ on:
 jobs:
   app-api-checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: app_db
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: app_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U app_user -d app_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
 
     steps:
       - name: Checkout
@@ -27,6 +41,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r apps/app-api/requirements.txt
           pip install pytest
+
+      - name: Wait for Postgres test service
+        run: |
+          python - <<'PY'
+          import time
+          import psycopg
+
+          dsn = "postgresql://app_user:app_password@127.0.0.1:5432/app_db"
+          last_error = None
+
+          for _ in range(30):
+              try:
+                  with psycopg.connect(dsn, connect_timeout=3, autocommit=True) as conn:
+                      with conn.cursor() as cur:
+                          cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                  break
+              except Exception as exc:
+                  last_error = exc
+                  time.sleep(2)
+          else:
+              raise last_error or RuntimeError("Postgres test service did not become ready.")
+          PY
 
       - name: Lint
         run: ruff check apps/app-api/src apps/app-api/tests
