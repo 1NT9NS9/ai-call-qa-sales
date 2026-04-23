@@ -56,37 +56,39 @@ class Stage3RAGServiceTests(unittest.TestCase):
                         import_response = client.post("/knowledge/import")
                         embed_response = client.post("/knowledge/embed")
                         create_call_response = client.post("/calls", json=CREATE_CALL_PAYLOAD)
+                        self.assertEqual(import_response.status_code, 201)
+                        self.assertEqual(embed_response.status_code, 200)
+                        self.assertEqual(create_call_response.status_code, 201)
+                        call_id = create_call_response.json()["id"]
 
-                    self.assertEqual(import_response.status_code, 201)
-                    self.assertEqual(embed_response.status_code, 200)
-                    self.assertEqual(create_call_response.status_code, 201)
-                    call_id = create_call_response.json()["id"]
+                        with app.state.session_factory() as session:
+                            session.execute(
+                                insert(persistence_models.TranscriptSegment),
+                                [
+                                    {
+                                        "call_id": call_id,
+                                        "speaker": "customer",
+                                        "text": "The pricing feels expensive and our budget needs internal approval.",
+                                        "start_ms": 0,
+                                        "end_ms": 1000,
+                                        "sequence_no": 1,
+                                    },
+                                    {
+                                        "call_id": call_id,
+                                        "speaker": "agent",
+                                        "text": "We should focus on value, approval steps, and the cost of inaction.",
+                                        "start_ms": 1000,
+                                        "end_ms": 2000,
+                                        "sequence_no": 2,
+                                    },
+                                ],
+                            )
+                            session.commit()
 
-                    with app.state.session_factory() as session:
-                        session.execute(
-                            insert(persistence_models.TranscriptSegment),
-                            [
-                                {
-                                    "call_id": call_id,
-                                    "speaker": "customer",
-                                    "text": "The pricing feels expensive and our budget needs internal approval.",
-                                    "start_ms": 0,
-                                    "end_ms": 1000,
-                                    "sequence_no": 1,
-                                },
-                                {
-                                    "call_id": call_id,
-                                    "speaker": "agent",
-                                    "text": "We should focus on value, approval steps, and the cost of inaction.",
-                                    "start_ms": 1000,
-                                    "end_ms": 2000,
-                                    "sequence_no": 2,
-                                },
-                            ],
+                        matches = app.state.rag_service.search_for_call(
+                            call_id=call_id,
+                            limit=3,
                         )
-                        session.commit()
-
-                    matches = app.state.rag_service.search_for_call(call_id=call_id, limit=3)
 
                 self.assertGreater(
                     len(matches),

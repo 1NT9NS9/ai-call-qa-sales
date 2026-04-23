@@ -132,46 +132,48 @@ class Stage4ConfidencePersistenceTests(unittest.TestCase):
                             "/calls",
                             json=CREATE_CALL_PAYLOAD,
                         )
+                        self.assertEqual(import_response.status_code, 201)
+                        self.assertEqual(embed_response.status_code, 200)
+                        self.assertEqual(create_call_response.status_code, 201)
 
-                self.assertEqual(import_response.status_code, 201)
-                self.assertEqual(embed_response.status_code, 200)
-                self.assertEqual(create_call_response.status_code, 201)
+                        call_id = create_call_response.json()["id"]
+                        with app.state.session_factory() as session:
+                            session.execute(
+                                insert(persistence_models.TranscriptSegment),
+                                [
+                                    {"call_id": call_id, **segment}
+                                    for segment in FIXED_TRANSCRIPT_SEGMENTS
+                                ],
+                            )
+                            call_session = session.get(
+                                persistence_models.CallSession,
+                                call_id,
+                            )
+                            call_session.processing_status = (
+                                persistence_models.CallProcessingStatus.TRANSCRIBED
+                            )
+                            session.commit()
 
-                call_id = create_call_response.json()["id"]
-                with app.state.session_factory() as session:
-                    session.execute(
-                        insert(persistence_models.TranscriptSegment),
-                        [
-                            {"call_id": call_id, **segment}
-                            for segment in FIXED_TRANSCRIPT_SEGMENTS
-                        ],
-                    )
-                    call_session = session.get(persistence_models.CallSession, call_id)
-                    call_session.processing_status = (
-                        persistence_models.CallProcessingStatus.TRANSCRIBED
-                    )
-                    session.commit()
+                        fake_chat_model = _FakeChatModel(
+                            json.dumps(VALID_ANALYSIS_RESULT_WITH_SERVICE_OWNED_CONFIDENCE)
+                        )
+                        analysis_service = analysis_service_module.build_analysis_service(
+                            session_factory=app.state.session_factory,
+                            rag_service=app.state.rag_service,
+                            chat_model=fake_chat_model,
+                        )
 
-                fake_chat_model = _FakeChatModel(
-                    json.dumps(VALID_ANALYSIS_RESULT_WITH_SERVICE_OWNED_CONFIDENCE)
-                )
-                analysis_service = analysis_service_module.build_analysis_service(
-                    session_factory=app.state.session_factory,
-                    rag_service=app.state.rag_service,
-                    chat_model=fake_chat_model,
-                )
+                        result_payload = analysis_service.analyze(call_id=call_id)
 
-                result_payload = analysis_service.analyze(call_id=call_id)
-
-                with app.state.session_factory() as session:
-                    persisted_analysis = session.get(
-                        persistence_models.CallAnalysis,
-                        call_id,
-                    )
-                    persisted_call = session.get(
-                        persistence_models.CallSession,
-                        call_id,
-                    )
+                        with app.state.session_factory() as session:
+                            persisted_analysis = session.get(
+                                persistence_models.CallAnalysis,
+                                call_id,
+                            )
+                            persisted_call = session.get(
+                                persistence_models.CallSession,
+                                call_id,
+                            )
 
                 return (
                     result_payload,

@@ -136,79 +136,81 @@ class Stage4ContextAssemblyTests(unittest.TestCase):
                             "/calls",
                             json=CREATE_CALL_PAYLOAD,
                         )
+                        self.assertEqual(import_response.status_code, 201)
+                        self.assertEqual(embed_response.status_code, 200)
+                        self.assertEqual(create_call_response.status_code, 201)
 
-                self.assertEqual(import_response.status_code, 201)
-                self.assertEqual(embed_response.status_code, 200)
-                self.assertEqual(create_call_response.status_code, 201)
+                        call_id = create_call_response.json()["id"]
+                        with app.state.session_factory() as session:
+                            session.execute(
+                                insert(persistence_models.TranscriptSegment),
+                                [
+                                    {"call_id": call_id, **segment}
+                                    for segment in FIXED_TRANSCRIPT_SEGMENTS
+                                ],
+                            )
+                            session.commit()
 
-                call_id = create_call_response.json()["id"]
-                with app.state.session_factory() as session:
-                    session.execute(
-                        insert(persistence_models.TranscriptSegment),
-                        [
-                            {"call_id": call_id, **segment}
-                            for segment in FIXED_TRANSCRIPT_SEGMENTS
-                        ],
-                    )
-                    session.commit()
+                        service = analysis_service_module.build_analysis_service(
+                            session_factory=app.state.session_factory,
+                            rag_service=app.state.rag_service,
+                        )
+                        builder_name, context_builder = _find_context_builder(service)
+                        context = _invoke_context_builder(context_builder, call_id=call_id)
 
-                service = analysis_service_module.build_analysis_service(
-                    session_factory=app.state.session_factory,
-                    rag_service=app.state.rag_service,
-                )
-                builder_name, context_builder = _find_context_builder(service)
-                context = _invoke_context_builder(context_builder, call_id=call_id)
+                        self.assertIsInstance(
+                            context,
+                            dict,
+                            (
+                                "expected Stage 4 context assembly to return a mapping "
+                                f"from {builder_name}"
+                            ),
+                        )
+                        self.assertIn("transcript", context)
+                        self.assertIn("retrieved_context", context)
+                        self.assertIn("call_metadata", context)
 
-                self.assertIsInstance(
-                    context,
-                    dict,
-                    (
-                        "expected Stage 4 context assembly to return a mapping "
-                        f"from {builder_name}"
-                    ),
-                )
-                self.assertIn("transcript", context)
-                self.assertIn("retrieved_context", context)
-                self.assertIn("call_metadata", context)
+                        transcript_text = _transcript_text(context)
+                        expected_transcript_text = " ".join(
+                            segment["text"] for segment in FIXED_TRANSCRIPT_SEGMENTS
+                        )
+                        self.assertIn(
+                            expected_transcript_text,
+                            transcript_text.replace("\n", " "),
+                            "expected assembled context to include the fixed persisted transcript fixture",
+                        )
 
-                transcript_text = _transcript_text(context)
-                expected_transcript_text = " ".join(
-                    segment["text"] for segment in FIXED_TRANSCRIPT_SEGMENTS
-                )
-                self.assertIn(
-                    expected_transcript_text,
-                    transcript_text.replace("\n", " "),
-                    "expected assembled context to include the fixed persisted transcript fixture",
-                )
+                        retrieved_context = context["retrieved_context"]
+                        self.assertIsInstance(
+                            retrieved_context,
+                            list,
+                            "expected retrieved_context to be a list of retrieved KB matches",
+                        )
+                        self.assertTrue(
+                            retrieved_context,
+                            "expected Stage 4 context assembly to include retrieved KB context",
+                        )
+                        expected_matches = [
+                            asdict(match)
+                            for match in app.state.rag_service.search_for_call(
+                                call_id=call_id,
+                                limit=5,
+                            )
+                        ]
+                        self.assertEqual(
+                            retrieved_context,
+                            expected_matches,
+                            (
+                                "expected assembled retrieved_context to come from the real "
+                                "Stage 3 retrieval path for the same call"
+                            ),
+                        )
 
-                retrieved_context = context["retrieved_context"]
-                self.assertIsInstance(
-                    retrieved_context,
-                    list,
-                    "expected retrieved_context to be a list of retrieved KB matches",
-                )
-                self.assertTrue(
-                    retrieved_context,
-                    "expected Stage 4 context assembly to include retrieved KB context",
-                )
-                expected_matches = [
-                    asdict(match)
-                    for match in app.state.rag_service.search_for_call(call_id=call_id, limit=5)
-                ]
-                self.assertEqual(
-                    retrieved_context,
-                    expected_matches,
-                    (
-                        "expected assembled retrieved_context to come from the real "
-                        "Stage 3 retrieval path for the same call"
-                    ),
-                )
-
-                self.assertEqual(
-                    context["call_metadata"],
-                    service.invoke_tool("get_call_metadata", call_id=call_id),
-                    "expected assembled call_metadata to match the stored call metadata",
-                )
+                        self.assertEqual(
+                            context["call_metadata"],
+                            service.invoke_tool("get_call_metadata", call_id=call_id),
+                            "expected assembled call_metadata to match the stored call metadata",
+                        )
         finally:
             clear_src_modules()
             shutil.rmtree(temp_root, ignore_errors=True)

@@ -338,49 +338,48 @@ class Stage4LangChainAnalysisServiceTests(unittest.TestCase):
                             "/calls",
                             json=CREATE_CALL_PAYLOAD,
                         )
+                        self.assertEqual(import_response.status_code, 201)
+                        self.assertEqual(embed_response.status_code, 200)
+                        self.assertEqual(create_call_response.status_code, 201)
 
-                self.assertEqual(import_response.status_code, 201)
-                self.assertEqual(embed_response.status_code, 200)
-                self.assertEqual(create_call_response.status_code, 201)
+                        call_id = create_call_response.json()["id"]
+                        with app.state.session_factory() as session:
+                            session.execute(
+                                insert(persistence_models.TranscriptSegment),
+                                [
+                                    {"call_id": call_id, **segment}
+                                    for segment in FIXED_TRANSCRIPT_SEGMENTS
+                                ],
+                            )
+                            session.commit()
 
-                call_id = create_call_response.json()["id"]
-                with app.state.session_factory() as session:
-                    session.execute(
-                        insert(persistence_models.TranscriptSegment),
-                        [
-                            {"call_id": call_id, **segment}
-                            for segment in FIXED_TRANSCRIPT_SEGMENTS
-                        ],
-                    )
-                    session.commit()
+                        fake_model = _FakeLangChainModel()
+                        service = _build_service_with_fake_model(
+                            session_factory=app.state.session_factory,
+                            rag_service=app.state.rag_service,
+                            fake_model=fake_model,
+                        )
+                        _, analyze_method = _find_analysis_method(service)
+                        result = _invoke_analysis(analyze_method, call_id=call_id)
 
-                fake_model = _FakeLangChainModel()
-                service = _build_service_with_fake_model(
-                    session_factory=app.state.session_factory,
-                    rag_service=app.state.rag_service,
-                    fake_model=fake_model,
-                )
-                _, analyze_method = _find_analysis_method(service)
-                result = _invoke_analysis(analyze_method, call_id=call_id)
-
-                self.assertIsNotNone(
-                    result,
-                    "expected Stage 4 happy-path analysis invocation to return a result",
-                )
-                self.assertIsNotNone(
-                    fake_model.bound_tools,
-                    "expected Stage 4 happy-path analysis to bind tools through LangChain",
-                )
-                self.assertEqual(
-                    [_tool_name(tool) for tool in fake_model.bound_tools],
-                    APPROVED_TOOL_NAMES,
-                    "expected only approved tools to be bound during happy-path analysis",
-                )
-                self.assertEqual(
-                    len(fake_model.invocations),
-                    1,
-                    "expected exactly one LangChain invocation on the fixed happy path",
-                )
+                        self.assertIsNotNone(
+                            result,
+                            "expected Stage 4 happy-path analysis invocation to return a result",
+                        )
+                        self.assertIsNotNone(
+                            fake_model.bound_tools,
+                            "expected Stage 4 happy-path analysis to bind tools through LangChain",
+                        )
+                        self.assertEqual(
+                            [_tool_name(tool) for tool in fake_model.bound_tools],
+                            APPROVED_TOOL_NAMES,
+                            "expected only approved tools to be bound during happy-path analysis",
+                        )
+                        self.assertEqual(
+                            len(fake_model.invocations),
+                            1,
+                            "expected exactly one LangChain invocation on the fixed happy path",
+                        )
         finally:
             clear_src_modules()
             shutil.rmtree(temp_root, ignore_errors=True)
