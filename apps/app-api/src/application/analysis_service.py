@@ -14,7 +14,12 @@ from src.application.analysis_tools import (
     build_analysis_tool_api,
     build_langchain_tools,
 )
-from src.infrastructure.persistence.models import TranscriptSegment
+from src.infrastructure.persistence.models import (
+    CallAnalysis,
+    CallProcessingStatus,
+    CallSession,
+    TranscriptSegment,
+)
 from src.services.rag import RAGService
 
 
@@ -128,8 +133,13 @@ class AnalysisService:
         for _attempt in range(2):
             response = bound_model.invoke(payload)
             try:
-                return self._parse_and_validate_analysis_output(
+                validated_output = self._parse_and_validate_analysis_output(
                     response=response,
+                    schema=payload["schema"],
+                )
+                return self._finalize_valid_analysis(
+                    call_id=call_id,
+                    validated_output=validated_output,
                     schema=payload["schema"],
                 )
             except AnalysisOutputValidationError as exc:
@@ -212,6 +222,39 @@ class AnalysisService:
 
         return bind_tools(self._langchain_tools)
 
+    def _finalize_valid_analysis(
+        self,
+        *,
+        call_id: int,
+        validated_output: dict[str, Any],
+        schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self._supports_persistence():
+            return validated_output
+
+        finalized_output = dict(validated_output)
+        computed_confidence = self._compute_confidence(
+            result_payload=finalized_output,
+            schema=schema,
+        )
+        finalized_output["confidence"] = computed_confidence
+        self._persist_valid_analysis(
+            call_id=call_id,
+            result_payload=finalized_output,
+            confidence=computed_confidence,
+        )
+        return finalized_output
+
+    def _supports_persistence(self) -> bool:
+        if self._session_factory is None:
+            return False
+
+        with self._session_factory() as session:
+            return all(
+                hasattr(session, method_name)
+                for method_name in ("add", "commit", "get")
+            )
+
     def _parse_and_validate_analysis_output(
         self,
         *,
@@ -251,6 +294,76 @@ class AnalysisService:
         raise AnalysisOutputValidationError(
             "Analysis response did not provide string content."
         )
+
+    def _compute_confidence(
+        self,
+        *,
+        result_payload: dict[str, Any],
+        schema: dict[str, Any],
+    ) -> float:
+        required_fields = schema.get("required", [])
+        populated_required_fields = sum(
+            1
+            for field_name in required_fields
+            if field_name in result_payload and result_payload[field_name] is not None
+        )
+        completeness = (
+            populated_required_fields / len(required_fields)
+            if required_fields
+            else 0.0
+        )
+
+        evidence_items = [
+            *result_payload.get("objections", []),
+            *result_payload.get("risks", []),
+        ]
+        evidence_bearing_total = len(evidence_items)
+        evidence_with_segments = sum(
+            1
+            for item in evidence_items
+            if item.get("evidence_segment_ids")
+        )
+        evidence_coverage = (
+            evidence_with_segments / evidence_bearing_total
+            if evidence_bearing_total
+            else 0.0
+        )
+
+        knowledge_usage = 1.0 if result_payload.get("used_knowledge") else 0.0
+        confidence = (
+            0.50 * completeness
+            + 0.30 * evidence_coverage
+            + 0.20 * knowledge_usage
+        )
+        return round(confidence, 2)
+
+    def _persist_valid_analysis(
+        self,
+        *,
+        call_id: int,
+        result_payload: dict[str, Any],
+        confidence: float,
+    ) -> None:
+        if self._session_factory is None:
+            raise RuntimeError("Analysis persistence requires session_factory.")
+
+        with self._session_factory() as session:
+            persisted_analysis = session.get(CallAnalysis, call_id)
+            if persisted_analysis is None:
+                persisted_analysis = CallAnalysis(call_id=call_id)
+                session.add(persisted_analysis)
+
+            persisted_analysis.result_json = result_payload
+            persisted_analysis.confidence = confidence
+            persisted_analysis.review_required = bool(result_payload.get("needs_review", False))
+            persisted_analysis.review_reasons = result_payload.get("review_reasons")
+
+            persisted_call = session.get(CallSession, call_id)
+            if persisted_call is None:
+                raise RuntimeError(f"CallSession not found for call_id={call_id}.")
+            persisted_call.processing_status = CallProcessingStatus.ANALYZED
+
+            session.commit()
 
     def _validate_schema_instance(
         self,
