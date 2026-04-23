@@ -1,5 +1,4 @@
 import importlib
-import os
 import shutil
 import unittest
 import uuid
@@ -130,9 +129,9 @@ class Stage5WebhookDeliveryTests(unittest.TestCase):
     ) -> None:
         temp_root, database_url = self._create_clean_database_context()
         recorded_calls: list[dict[str, object]] = []
-        fake_httpx_client = lambda *args, **kwargs: _RecordingHttpxClient(
-            recorded_calls, *args, **kwargs
-        )
+
+        def fake_httpx_client(*args, **kwargs):
+            return _RecordingHttpxClient(recorded_calls, *args, **kwargs)
 
         env_values = {
             "APP_ENV": "test",
@@ -192,9 +191,9 @@ class Stage5WebhookDeliveryTests(unittest.TestCase):
     ) -> None:
         temp_root, database_url = self._create_clean_database_context()
         recorded_calls: list[dict[str, object]] = []
-        fake_httpx_client = lambda *args, **kwargs: _RecordingHttpxClient(
-            recorded_calls, *args, **kwargs
-        )
+
+        def fake_httpx_client(*args, **kwargs):
+            return _RecordingHttpxClient(recorded_calls, *args, **kwargs)
 
         env_values = {
             "APP_ENV": "test",

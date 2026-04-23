@@ -7,9 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.adapters.delivery import (
-    WebhookConfigurationError,
     WebhookDeliveryAdapter,
-    WebhookDeliveryError,
     build_webhook_delivery_adapter,
 )
 from src.infrastructure.persistence.models import (
