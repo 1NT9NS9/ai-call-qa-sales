@@ -17,7 +17,7 @@ jobs:
           POSTGRES_USER: app_user
           POSTGRES_PASSWORD: app_password
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd="pg_isready -U app_user -d app_db"
           --health-interval=5s
@@ -48,7 +48,7 @@ jobs:
           import time
           import psycopg
 
-          dsn = "postgresql://app_user:app_password@127.0.0.1:5432/app_db"
+          dsn = "postgresql://app_user:app_password@127.0.0.1:55432/app_db"
           last_error = None
 
           for _ in range(30):
@@ -87,6 +87,9 @@ jobs:
           PY
 
       - name: Run tests if present
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 55432
         run: |
           if find apps/app-api/tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
             python -m pytest apps/app-api/tests -q
