@@ -1,5 +1,6 @@
 import importlib
 import inspect
+import json
 import shutil
 import unittest
 import uuid
@@ -57,6 +58,44 @@ CREATE_CALL_PAYLOAD = {
     "source_type": "api",
     "metadata": {"campaign": "stage4", "channel": "sales"},
 }
+VALID_ANALYSIS_OUTPUT = {
+    "summary": "Customer raised pricing and approval concerns.",
+    "score": 7.5,
+    "score_breakdown": [
+        {
+            "criterion": "Discovery",
+            "score": 3.0,
+            "max_score": 5.0,
+            "reason": "Some context gathered.",
+        }
+    ],
+    "objections": [
+        {
+            "text": "Pricing is expensive.",
+            "handled": True,
+            "evidence_segment_ids": [1],
+        }
+    ],
+    "risks": [
+        {
+            "text": "Internal approval may stall.",
+            "severity": "medium",
+            "evidence_segment_ids": [1],
+        }
+    ],
+    "next_best_action": "Send a mutual action plan.",
+    "coach_feedback": "Tie value to approval process.",
+    "used_knowledge": [
+        {
+            "document_id": 3,
+            "chunk_id": 7,
+            "reason": "Pricing objection guidance applied.",
+        }
+    ],
+    "confidence": 0.82,
+    "needs_review": False,
+    "review_reasons": [],
+}
 
 
 class _FakeBoundLLM:
@@ -67,7 +106,7 @@ class _FakeBoundLLM:
     def invoke(self, payload):
         self._parent.invocations.append(payload)
         return {
-            "content": '{"summary":"stub"}',
+            "content": json.dumps(VALID_ANALYSIS_OUTPUT),
             "tool_names": [_tool_name(tool) for tool in self._tools],
         }
 
@@ -83,7 +122,7 @@ class _FakeLangChainModel:
 
     def invoke(self, payload):
         self.invocations.append(payload)
-        return {"content": '{"summary":"stub"}'}
+        return {"content": json.dumps(VALID_ANALYSIS_OUTPUT)}
 
 
 class _FakeSessionContext:
