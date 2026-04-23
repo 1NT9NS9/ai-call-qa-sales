@@ -1,0 +1,6 @@
+{
+  "analysis_schema_contract_source": {
+    "contract_path": "../../../../../docs/CONTRACTS.md",
+    "fence_label": "stage4-analysis-result-schema"
+  }
+}

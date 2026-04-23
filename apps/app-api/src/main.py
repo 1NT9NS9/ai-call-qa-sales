@@ -20,6 +20,7 @@ from src.infrastructure.persistence.models import (
     KnowledgeDocument,
     TranscriptSegment,
 )
+from src.services.rag import build_rag_service
 
 
 class CreateCallSessionRequest(BaseModel):
@@ -63,6 +64,24 @@ class KnowledgeImportResponse(BaseModel):
 
 class KnowledgeEmbedResponse(BaseModel):
     embedded_count: int
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+
+class KnowledgeSearchMatchResponse(BaseModel):
+    chunk_id: int
+    document_id: int
+    source_path: str
+    chunk_text: str
+    chunk_index: int
+    distance: float
+
+
+class KnowledgeSearchResponse(BaseModel):
+    matches: list[KnowledgeSearchMatchResponse]
 
 
 def _store_uploaded_audio(
@@ -307,6 +326,10 @@ def create_app() -> FastAPI:
         bind=application.state.engine,
         expire_on_commit=False,
     )
+    application.state.rag_service = build_rag_service(
+        session_factory=application.state.session_factory,
+        embedding_service=application.state.embedding_service,
+    )
 
     @application.get("/health")
     def health() -> dict[str, str]:
@@ -345,6 +368,36 @@ def create_app() -> FastAPI:
 
         return KnowledgeEmbedResponse(
             embedded_count=embedded_count,
+        )
+
+    @application.post("/knowledge/search", status_code=status.HTTP_200_OK)
+    def search_knowledge(
+        payload: KnowledgeSearchRequest,
+        request: Request,
+    ) -> KnowledgeSearchResponse:
+        try:
+            matches = request.app.state.rag_service.search(
+                query=payload.query,
+                limit=payload.limit,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail=str(exc),
+            ) from exc
+
+        return KnowledgeSearchResponse(
+            matches=[
+                KnowledgeSearchMatchResponse(
+                    chunk_id=match.chunk_id,
+                    document_id=match.document_id,
+                    source_path=match.source_path,
+                    chunk_text=match.chunk_text,
+                    chunk_index=match.chunk_index,
+                    distance=match.distance,
+                )
+                for match in matches
+            ]
         )
 
     @application.post("/calls", status_code=status.HTTP_201_CREATED)

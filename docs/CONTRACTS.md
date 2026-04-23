@@ -56,6 +56,160 @@ Contract details:
 - `needs_review` lives in the analysis payload
 - persisted `review_required` mirrors the quality decision in storage
 
+Canonical runtime JSON schema:
+
+```stage4-analysis-result-schema
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Stage4AnalysisResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "score",
+    "score_breakdown",
+    "objections",
+    "risks",
+    "next_best_action",
+    "coach_feedback",
+    "used_knowledge",
+    "confidence",
+    "needs_review",
+    "review_reasons"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "score": {
+      "type": "number"
+    },
+    "score_breakdown": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "score",
+          "max_score",
+          "reason"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "max_score": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "objections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "handled",
+          "evidence_segment_ids"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "handled": {
+            "type": "boolean"
+          },
+          "evidence_segment_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "severity",
+          "evidence_segment_ids"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "evidence_segment_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "next_best_action": {
+      "type": "string"
+    },
+    "coach_feedback": {
+      "type": "string"
+    },
+    "used_knowledge": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "chunk_id",
+          "reason"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "integer"
+          },
+          "chunk_id": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "needs_review": {
+      "type": "boolean"
+    },
+    "review_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+```
+
 ## Guardrails
 
 - if the analysis JSON is invalid, retry once
