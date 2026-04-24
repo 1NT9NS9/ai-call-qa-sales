@@ -1,5 +1,9 @@
 # AI Call QA & Sales Coach MVP
 
+Flow:
+
+`audio -> text -> vector search over knowledge base -> lead score 1-10 -> tier-based evaluation -> next best action -> API / webhook`
+
 A simple API for processing calls:
 
 1. upload audio
